@@ -69,4 +69,5 @@ library(ggplot2)
 g <- ggplot(byDamageFiltered, aes(x = EVTYPE, y = TOTALDAMAGE, fill = EVTYPE)) + 
     geom_bar(width = 1, stat = "identity") + 
     theme(axis.text.x = element_text(angle=90, hjust=1), legend.position = "none")
+g
 ```
