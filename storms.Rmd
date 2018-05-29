@@ -16,7 +16,8 @@ storms <- read.csv(dataFileName)
 ```
 
 The values of damage (PROPDMG and CROPDMG) are given in a weird form, represented as a value and exponent.
-The exponent
+The exponent is represented numerically or as a character. Now we compute the total damage ('prop' and 'crop')
+adding an extra column called DAMAGENUMERIC.
 
 ```{r}
 exponentToMultiplier <- function(exponent)
