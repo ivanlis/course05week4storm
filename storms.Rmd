@@ -14,10 +14,11 @@ We start by reading the data from the provided compressed CSV file.
 dataFileName <- "repdata_data_StormData.csv.bz2"
 storms <- read.csv(dataFileName)
 ```
-
+Before we are able to do research to answer our questions, some preprocessing
+is needed.
 The values of damage (PROPDMG and CROPDMG) are given in a weird form, represented as a value and exponent.
-The exponent is represented numerically or as a character. Now we compute the total damage ('prop' and 'crop')
-adding an extra column called DAMAGENUMERIC.
+The exponent is either a number or as a character. To make it easy to work with damage values we compute the total damage ('prop' plus 'crop')
+adding an extra numeric column called DAMAGENUMERIC.
 
 ```{r}
 exponentToMultiplier <- function(exponent)
@@ -40,8 +41,32 @@ exponentToMultiplier <- function(exponent)
 library(dplyr)
 #storms <- mutate(storms, PROPDMGMULT = exponentToMultiplier(PROPDMGEXP), CROPDMGMULT = exponentToMultiplier(CROPDMGEXP))
 #storms <- mutate(storms, PROPDMGNUMERIC = PROPDMG * exponentToMultiplier(PROPDMGEXP), CROPDMGNUMERIC = CROPDMG * exponentToMultiplier(CROPDMGEXP))
-storms <- mutate(storms, DAMAGENUMERIC = PROPDMG * exponentToMultiplier(PROPDMGEXP) + CROPDMG * exponentToMultiplier(CROPDMGEXP))
+storms <- mutate(storms, DAMAGENUMERIC = PROPDMG * exponentToMultiplier(PROPDMGEXP) +
+                     CROPDMG * exponentToMultiplier(CROPDMGEXP))
 ```
 
 ## Result
 
+
+```{r}
+byDamage <- storms %>% select(EVTYPE, DAMAGENUMERIC) %>% group_by(EVTYPE) %>%
+    summarize(TOTALDAMAGE = sum(DAMAGENUMERIC)) %>%
+    arrange(desc(TOTALDAMAGE))
+```
+
+```{r}
+byDamageMostImportant <- byDamage %>% filter(TOTALDAMAGE >= 8000000000)
+byDamageLessImportant <- byDamage %>% filter(TOTALDAMAGE < 8000000000)
+byDamageLessImportant <- byDamageLessImportant %>% 
+    summarize(EVTYPE = "OTHERS", TOTALDAMAGE = sum(TOTALDAMAGE))
+byDamageFiltered <- rbind(byDamageMostImportant, byDamageLessImportant)
+byDamageFiltered$EVTYPE <- reorder(byDamageFiltered$EVTYPE,
+                                   -byDamageFiltered$TOTALDAMAGE)
+```
+
+```{r}
+library(ggplot2)
+g <- ggplot(byDamageFiltered, aes(x = EVTYPE, y = TOTALDAMAGE, fill = EVTYPE)) + 
+    geom_bar(width = 1, stat = "identity") + 
+    theme(axis.text.x = element_text(angle=90, hjust=1), legend.position = "none")
+```
