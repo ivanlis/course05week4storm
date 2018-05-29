@@ -35,7 +35,8 @@ exponentToMultiplier <- function(exponent)
 
 
 library(dplyr)
-storms <- mutate(storms, PROPDMGMULT = exponentToMultiplier(PROPDMGEXP), CROPDMGMULT = exponentToMultiplier(CROPDMGEXP))
+#storms <- mutate(storms, PROPDMGMULT = exponentToMultiplier(PROPDMGEXP), CROPDMGMULT = exponentToMultiplier(CROPDMGEXP))
+storms <- mutate(storms, PROPDMGNUMERIC = PROPDMG * exponentToMultiplier(PROPDMGEXP), CROPDMGNUMERIC = CROPDMG * exponentToMultiplier(CROPDMGEXP))
 ```
 
 ## Result
