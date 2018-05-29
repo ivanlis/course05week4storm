@@ -1,5 +1,5 @@
 ---
-title: "Analysis of Damages Caused by Weather Phenomena Using Open Data"
+title: "Analysis of Damage Caused by Weather Phenomena Using Open Data"
 author: Ivan Lysiuchenko
 output: html_document
 ---
@@ -13,6 +13,29 @@ We start by reading the data from the provided compressed CSV file.
 ```{r}
 dataFileName <- "repdata_data_StormData.csv.bz2"
 storms <- read.csv(dataFileName)
+```
+
+```{r}
+exponentToMultiplier <- function(exponent)
+{
+    #exponent[is.na(exponent)] 
+    expCode <- toupper(exponent)
+    res <- expCode
+    res[is.na(expCode)] <- 0
+    res[expCode %in% c("-", "?", "NA")] <- 0
+    res[expCode %in% 0:8] <- 10 ^ as.integer(expCode[expCode %in% 0:8])
+    res[expCode %in% c(" ", "", "+")] <- 1
+    res[expCode == "H"] <- 100
+    res[expCode == "K"] <- 1000
+    res[expCode == "M"] <- 1e6
+    res[expCode == "B"] <- 1e9
+    
+    as.numeric(res)
+}
+
+
+library(dplyr)
+storms <- mutate(storms, PROPDMGMULT = exponentToMultiplier(PROPDMGEXP), CROPDMGMULT = exponentToMultiplier(CROPDMGEXP))
 ```
 
 ## Result
