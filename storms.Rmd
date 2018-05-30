@@ -6,6 +6,13 @@ output: html_document
 
 ## Synopsis
 
+Weather phenomena and their consequences play an extremely important role in human life.
+Many of them are able to disrupt normal life, cause death or injuries, damage property and critical infrastructure.
+This research is based on open data from the US National Oceanic and Atmospheric Administration (NOAA).
+The aim was to detect the weather phenomena which are most harmful for people's life and health, as well as
+those causing most damage to economy. To achieve the mentioned goal, the total impact on the US population and economy 
+was computed over the monitoring period starting in January, 1950 and ending in November, 2011.
+
 ## Data Processing
 
 We start by reading the data from the provided compressed CSV file.
@@ -17,13 +24,15 @@ storms <- read.csv(dataFileName)
 Before we are able to do research to answer our questions, some preprocessing
 is needed.
 The values of damage (PROPDMG and CROPDMG) are given in a weird form, represented as a value and exponent.
-The exponent is either a number or as a character. To make it easy to work with damage values we compute the total damage ('prop' plus 'crop')
-adding an extra numeric column called DAMAGENUMERIC.
+The exponent is either a number or as a character ('0' means 10<sup>0</sup>=1, '4' means 10<sup>4</sup>, 'K' means 10<sup>3</sup> and so on).
+Sometimes the exponent fields are used to mark missing estimates (like '-' or '?').
+To make it easy to work with damage values we compute the total damage ('prop' plus 'crop')
+adding an extra numeric column called DAMAGENUMERIC, as well as two columns for the two individual components of economic damage,
+PROPDMGNUMERIC and CROPDMGNUMERIC.
 
 ```{r}
 exponentToMultiplier <- function(exponent)
 {
-    #exponent[is.na(exponent)] 
     expCode <- toupper(exponent)
     res <- expCode
     res[is.na(expCode)] <- 0
@@ -39,24 +48,121 @@ exponentToMultiplier <- function(exponent)
 }
 
 library(dplyr)
-#storms <- mutate(storms, PROPDMGMULT = exponentToMultiplier(PROPDMGEXP), CROPDMGMULT = exponentToMultiplier(CROPDMGEXP))
-#storms <- mutate(storms, PROPDMGNUMERIC = PROPDMG * exponentToMultiplier(PROPDMGEXP), CROPDMGNUMERIC = CROPDMG * exponentToMultiplier(CROPDMGEXP))
 storms <- mutate(storms, DAMAGENUMERIC = PROPDMG * exponentToMultiplier(PROPDMGEXP) +
-                     CROPDMG * exponentToMultiplier(CROPDMGEXP))
+                     CROPDMG * exponentToMultiplier(CROPDMGEXP), 
+                 PROPDMGNUMERIC = PROPDMG * exponentToMultiplier(PROPDMGEXP), CROPDMGNUMERIC = CROPDMG * exponentToMultiplier(CROPDMGEXP))
 ```
 
-## Result
+## Results
 
+### By impact on public health
+
+Regarding the impact of weather phenomena on population's health, the NOAA data used in this research contains
+two components:
+- fatalities
+- injuries.
+
+Let's detect the conditions that are the most harmful in these aspects.
+
+In this step we compute the total number of fatalities for each event type by means of the following code.
+The output shows the most severe weather factors.
+
+```{r}
+byFatalities <- storms %>% select(EVTYPE, FATALITIES) %>% group_by(EVTYPE) %>%
+    summarize(TOTALFATALITIES = sum(FATALITIES)) %>% arrange(desc(TOTALFATALITIES))
+
+byFatalities[1:15,]
+```
+
+To understand the overall image, it's more convenient to have a graphical representation of the summary we've just made.
+As there are too many event types in the table, we need some preprocessing to get a clear image. 
+Let's plot separately only a few most important factors and group together the rest of weather conditions labeling them as 'OTHERS'.
+
+```{r}
+numPlottedFactors <- 15
+byFatalitiesMostImportant <- byFatalities[1:numPlottedFactors, ]
+byFatalitiesLessImportant <- byFatalities[(numPlottedFactors + 1):nrow(byFatalities), ]
+byFatalitiesLessImportant <- byFatalitiesLessImportant %>% summarize(EVTYPE = "OTHERS", TOTALFATALITIES = sum(TOTALFATALITIES))
+byFatalitiesFiltered <- rbind(byFatalitiesMostImportant, byFatalitiesLessImportant)
+byFatalitiesFiltered$EVTYPE <- reorder(byFatalitiesFiltered$EVTYPE,
+                                   -byFatalitiesFiltered$TOTALFATALITIES)
+```
+
+The actual visualization is performed this way:
+
+```{r}
+library(ggplot2)
+g <- ggplot(byFatalitiesFiltered, aes(x = EVTYPE, y = TOTALFATALITIES, fill = EVTYPE)) + 
+    geom_bar(width = 1, stat = "identity") + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") + 
+    labs(title = "Total fatalities by event type", x = "Event type", y = "Total fatalities")
+g
+```
+
+Now exactly the same procedure is applied to the injuries data.
+
+```{r}
+byInjuries <- storms %>% select(EVTYPE, INJURIES) %>% group_by(EVTYPE) %>%
+    summarize(TOTALINJURIES = sum(INJURIES)) %>% arrange(desc(TOTALINJURIES))
+
+byInjuries[1:15,]
+```
+
+Like in the fatalities analysis, we summarize less severe conditions and place them in a category called 'OTHERS'.
+
+```{r}
+byInjuriesMostImportant <- byInjuries[1:numPlottedFactors, ]
+byInjuriesLessImportant <- byInjuries[(numPlottedFactors + 1):nrow(byFatalities), ]
+byInjuriesLessImportant <- byInjuriesLessImportant %>% summarize(EVTYPE = "OTHERS", TOTALINJURIES = sum(TOTALINJURIES))
+byInjuriesFiltered <- rbind(byInjuriesMostImportant, byInjuriesLessImportant)
+byInjuriesFiltered$EVTYPE <- reorder(byInjuriesFiltered$EVTYPE, 
+                                     -byInjuriesFiltered$TOTALINJURIES)
+
+g <- ggplot(byInjuriesFiltered, aes(x = EVTYPE, y = TOTALINJURIES, fill = EVTYPE)) + 
+    geom_bar(width = 1, stat = "identity") + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") + 
+    labs(title = "Total injuries by event type", x = "Event type", y = "Total injuries")
+
+g
+```
+
+Although there some differences between the obtained lists, in general the conditions killing many people also are the worst in terms
+of injuries. One thing easy to observe from the plot is a relatively high number of injuries caused by tornados.
+
+Let's consider the overall impact on population health as the sum of fatalities and injuries. Here is the code performing a similar analysis
+and its output.
+
+```{r}
+byHealthDamage <- storms %>% select(EVTYPE, FATALITIES, INJURIES) %>% mutate(HEALTHDAMAGE = FATALITIES + INJURIES) %>%
+    group_by(EVTYPE) %>% summarize(TOTALHEALTHDAMAGE = sum(HEALTHDAMAGE)) %>% arrange(desc(TOTALHEALTHDAMAGE))
+
+byHealthDamage[1:15,]
+```
+
+
+### By overall economic damage
+
+The aim of this part of the research is detecting the weather phenomena causing the largest damage to the economy.
+Let's compute total damage by phenomenon type, order the totals in descending order.
+After that, we can see the types corresponding to the worst impact on the economy (property and crops).
 
 ```{r}
 byDamage <- storms %>% select(EVTYPE, DAMAGENUMERIC) %>% group_by(EVTYPE) %>%
     summarize(TOTALDAMAGE = sum(DAMAGENUMERIC)) %>%
     arrange(desc(TOTALDAMAGE))
+
+byDamage[1:15, ]
 ```
 
+
+A plot comparing damage caused by different weather conditions is built. As in the previous steps, we separate the most important factors
+and label the rest as 'OTHERS'. Let's set a threshold value.
+Then we group together the event types causing damage levels lower than the threshold and label them as 'OTHERS'.
+
 ```{r}
-byDamageMostImportant <- byDamage %>% filter(TOTALDAMAGE >= 8000000000)
-byDamageLessImportant <- byDamage %>% filter(TOTALDAMAGE < 8000000000)
+damageThreshold <- 8e9
+byDamageMostImportant <- byDamage %>% filter(TOTALDAMAGE >= damageThreshold)
+byDamageLessImportant <- byDamage %>% filter(TOTALDAMAGE < damageThreshold)
 byDamageLessImportant <- byDamageLessImportant %>% 
     summarize(EVTYPE = "OTHERS", TOTALDAMAGE = sum(TOTALDAMAGE))
 byDamageFiltered <- rbind(byDamageMostImportant, byDamageLessImportant)
@@ -64,10 +170,40 @@ byDamageFiltered$EVTYPE <- reorder(byDamageFiltered$EVTYPE,
                                    -byDamageFiltered$TOTALDAMAGE)
 ```
 
+The following code builds a bar plot comparing damage by event type.
+
 ```{r}
-library(ggplot2)
-g <- ggplot(byDamageFiltered, aes(x = EVTYPE, y = TOTALDAMAGE, fill = EVTYPE)) + 
+g <- ggplot(byDamageFiltered, aes(x = EVTYPE, y = TOTALDAMAGE / 1e9, fill = EVTYPE)) + 
     geom_bar(width = 1, stat = "identity") + 
-    theme(axis.text.x = element_text(angle=90, hjust=1), legend.position = "none")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none") +
+    labs(title = "Total economic damage by event type", x = "Event type", y = "Total damage, billion dollars")
 g
 ```
+
+### Comparison of damage to property and crops
+
+Let's perform a similar procedure to analyze only the damage to property.
+
+```{r}
+byDamageProp <- storms %>% select(EVTYPE, PROPDMGNUMERIC) %>%
+    group_by(EVTYPE) %>% summarize(TOTALDAMAGE = sum(PROPDMGNUMERIC)) %>% arrange(desc(TOTALDAMAGE))
+byDamageProp[1:15,]
+```
+
+Also we need a similar summary for the damage to crops.
+
+```{r}
+byDamageCrop <- storms %>% select(EVTYPE, CROPDMGNUMERIC) %>%
+    group_by(EVTYPE) %>% summarize(TOTALDAMAGE = sum(CROPDMGNUMERIC)) %>% arrange(desc(TOTALDAMAGE))
+byDamageCrop[1:15,]
+```
+
+This simple analysis shows that the worst weather phenomena damaging crops are somewhat different from those causing the worst damage to property.
+
+## Conclusion
+
+We computed some total numbers describing the damage caused to the US by different weather phenomena during 1950-2011.
+The worst phenomena turned out to be:
+- Regarding fatalities: tornado, excessive heat and flash flood.
+- Regarding injuries: TSTM (thunderstorm?) wind and flood.
+- Regarding the overall damage to economy: flood, hurricane/typhoon and tornado.
